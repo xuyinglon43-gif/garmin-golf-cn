@@ -133,6 +133,96 @@ async (path) => {
 """
 
 
+def _fetch_via_navigation(page, browser, captured_responses, max_rounds, scorecards_url, domain):
+    """Fallback：纯靠浏览器 navigation 触发 SPA 加载，从响应里截数据。
+
+    用法是逐个 scorecard 导航 + 拦截 /golf-api/ 响应。慢但绝对靠谱。
+    """
+    import re
+    print()
+    print("  🔄 切换到 navigation 模式：通过 SPA 自身导航来触发数据加载")
+
+    summary_data = captured_responses.get("summary", {})
+    cards = summary_data.get("scorecardSummaries", []) or []
+    if max_rounds:
+        cards = cards[:max_rounds]
+    print(f"  ✓ 用 SPA summary：{len(cards)} 轮"
+          + (f"（限到前 {max_rounds}）" if max_rounds else ""))
+
+    rounds_data = []
+    total_shots = total_holes = failures = 0
+
+    # 按 scorecard ID 分类收集 detail 和 shots
+    captured_details: dict[str, dict] = {}
+    captured_shots: dict[str, list] = {}
+
+    def on_response(resp):
+        url = resp.url
+        if "/golf-api/scorecard/detail" in url and resp.status == 200:
+            m = re.search(r"scorecard-ids=([^&]+)", url)
+            if m:
+                try:
+                    captured_details[m.group(1)] = resp.json()
+                except Exception:
+                    pass
+        elif "/golf-api/shot/scorecard/" in url and resp.status == 200:
+            m = re.search(r"/shot/scorecard/([^/]+)/hole", url)
+            if m:
+                try:
+                    captured_shots.setdefault(m.group(1), []).append(resp.json())
+                except Exception:
+                    pass
+
+    page.on("response", on_response)
+
+    for i, card in enumerate(cards, 1):
+        card_id = card.get("id")
+        cname = card.get("courseName", "未知球场")
+        print(f"  [{i:>3}/{len(cards)}] {cname}", flush=True)
+        try:
+            page.goto(f"{scorecards_url}/{card_id}",
+                      timeout=30000, wait_until="domcontentloaded")
+            page.wait_for_load_state("networkidle", timeout=15000)
+            time.sleep(0.5)
+        except PWTimeout:
+            pass
+
+        detail = captured_details.get(card_id)
+        shots_list = captured_shots.get(card_id, [])
+
+        if not detail:
+            print(f"          ✗ 没拦到 detail")
+            failures += 1
+            continue
+
+        # 处理 shots
+        shots_per_hole = []
+        for shot_data in shots_list:
+            deep_convert_locs(shot_data)
+            if isinstance(shot_data, dict):
+                for hs in shot_data.get("holeShots", []) or []:
+                    total_shots += len(hs.get("shots", []) or [])
+                    if hs.get("shots"):
+                        total_holes += 1
+            shots_per_hole.append({"data": shot_data})
+
+        rounds_data.append({"summary": card, "detail": detail, "shots": shots_per_hole})
+
+    browser.close()
+
+    return {
+        "clubs": [],  # 这条路径没拉 clubs
+        "rounds": rounds_data,
+        "_stats": {
+            "rounds": len(rounds_data),
+            "holes": total_holes,
+            "shots": total_shots,
+            "failures": failures,
+            "mode": "navigation",
+        },
+    }
+
+
 def call_api(page, path: str, retry: int = 3):
     """在浏览器内运行 fetch，结果直接返回到 Python。"""
     last_err = None
@@ -158,11 +248,16 @@ def call_api(page, path: str, retry: int = 3):
 
 def fetch_all(domain: str, max_rounds: int | None = None,
               headless: bool = False) -> dict:
-    base_url = f"https://connect.{domain}/modern/"
     locale = "zh_CN" if domain.endswith(".cn") else "en"
+    # 直接进 /app/scorecards 页面——这会触发 SPA 自己调 /golf-api/，
+    # 既能建立 golf-api session 又能让我们抓到 SPA 的真实请求头
+    scorecards_url = f"https://connect.{domain}/app/scorecards"
+
+    # 收集 SPA 实际发出的 /golf-api/ 请求头部（用来对比 + 复用）
+    captured_headers: dict[str, str] = {}
+    captured_responses: dict[str, dict] = {}
 
     with sync_playwright() as p:
-        # 反爬：用真实 Chrome 启动参数 + 隐藏 webdriver 标识
         browser = p.chromium.launch(
             headless=headless,
             args=[
@@ -180,7 +275,6 @@ def fetch_all(domain: str, max_rounds: int | None = None,
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         )
-        # 隐藏 navigator.webdriver = true（Cloudflare 的常见检测）
         context.add_init_script(
             "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
         )
@@ -188,44 +282,82 @@ def fetch_all(domain: str, max_rounds: int | None = None,
         page = context.new_page()
         page.on("pageerror", lambda err: print(f"  [浏览器错误] {err}"))
 
-        print(f"  → 打开 {base_url}（{'headless' if headless else '可见'}）")
-        try:
-            page.goto(base_url, timeout=45000, wait_until="domcontentloaded")
-        except PWTimeout:
-            print(f"  ⚠️  页面加载超时，继续尝试 API 调用")
+        # 关键：拦截 /golf-api/ 请求，把头部存下来
+        def on_request(req):
+            if "/golf-api/" in req.url:
+                # 第一个就够了，记下来
+                if not captured_headers:
+                    for k, v in req.headers.items():
+                        captured_headers[k] = v
 
-        # 等 SPA 完全加载（cookies / CSRF 等都准备好）
+        def on_response(resp):
+            if "/golf-api/scorecard/summary" in resp.url and resp.status == 200:
+                try:
+                    captured_responses["summary"] = resp.json()
+                except Exception:
+                    pass
+
+        page.on("request", on_request)
+        page.on("response", on_response)
+
+        print(f"  → 打开 {scorecards_url}（让 SPA 自己触发 /golf-api/）")
         try:
-            page.wait_for_load_state("networkidle", timeout=15000)
+            page.goto(scorecards_url, timeout=45000, wait_until="domcontentloaded")
+        except PWTimeout:
+            print(f"  ⚠️  页面加载超时，继续等待")
+
+        # 等 SPA 完成它自己的所有 /golf-api/ 调用
+        try:
+            page.wait_for_load_state("networkidle", timeout=20000)
         except PWTimeout:
             pass
 
-        # 验证：直接打 /golf-api/ summary，不用伪 ping。
-        # 用一个不返回大量数据的查询（per-page=1）做轻量验证。
-        print("  → 验证登录态 + 浏览器能否访问 /golf-api/ ...")
+        # 看 SPA 的请求情况
+        print(f"\n  📊 SPA 抓取情况：")
+        print(f"     抓到 /golf-api/ 请求：{1 if captured_headers else 0}（看到 SPA 自己跑通 = 验证通过）")
+        if captured_headers:
+            sensitive = {"authorization", "cookie"}
+            for k, v in captured_headers.items():
+                if k.lower() in sensitive:
+                    print(f"     {k}: <{len(v)} chars hidden>")
+                elif k.lower().startswith(":"):
+                    continue  # HTTP/2 伪头部
+                else:
+                    short_v = v[:80] + "..." if len(v) > 80 else v
+                    print(f"     {k}: {short_v}")
+        print(f"     SPA 抓到的 summary：{'✓ 有' if 'summary' in captured_responses else '✗ 没抓到'}")
+
+        if not captured_headers:
+            print()
+            print("  ✗ SPA 自己也没成功调 /golf-api/——状态可能失效")
+            print("  → 跑：python3.11 scripts/fetch_garmin_pw.py --relogin")
+            browser.close()
+            sys.exit(1)
+
+        # 用 SPA 抓到的 summary 直接当作我们的 summary（已经成功了！）
+        if "summary" in captured_responses:
+            print(f"\n  ✓ 直接复用 SPA 抓到的 summary（轮次："
+                  f"{len(captured_responses['summary'].get('scorecardSummaries', []))}）")
+
+        # 现在用同一个 page evaluate，看我们自己 fetch 能不能也通过
+        print(f"\n  → 测试自主 /golf-api/ 调用...")
         try:
             probe = call_api(
                 page,
                 f"{GOLF_API_BASE}/scorecard/summary?per-page=1&user-locale={locale}",
                 retry=2,
             )
+            if isinstance(probe, dict) and "scorecardSummaries" in probe:
+                print(f"  ✓ 自主调用通过")
+            else:
+                print(f"  ⚠️  自主调用响应异常：{str(probe)[:200]}")
         except Exception as e:
-            print()
-            print(f"  ✗ 验证失败：{e}")
-            print()
-            print("  可能原因：")
-            print("   1. 登录状态失效 → 跑：python3.11 scripts/fetch_garmin_pw.py --relogin")
-            print("   2. Cloudflare 反爬拦截 → 改用可见浏览器：")
-            print("      python3.11 scripts/fetch_garmin_pw.py（去掉 --headless）")
-            print("   3. .cn 网关本身限制 → 联系我加诊断")
-            browser.close()
-            sys.exit(1)
-
-        if isinstance(probe, dict) and "scorecardSummaries" in probe:
-            n = len(probe["scorecardSummaries"])
-            print(f"  ✓ 拿到 {n} 轮预览（验证通过）")
-        else:
-            print(f"  ⚠️  响应格式异常：{str(probe)[:200]}")
+            print(f"  ✗ 自主调用仍失败：{e}")
+            print(f"  → 但我们有 SPA 抓到的 summary，可以继续用 navigation 模式")
+            # Fallback: 用 navigation + 拦截响应模式
+            return _fetch_via_navigation(
+                page, browser, captured_responses, max_rounds, scorecards_url, domain
+            )
 
         # 1. 球杆库
         print("\n[1/3] 拉取球杆库…")
