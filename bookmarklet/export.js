@@ -20,8 +20,9 @@
   // 配置
   // ============================================================
 
-  const VERSION = '0.2.0-bookmarklet';
-  const BASE = 'https://connect.garmin.com/modern/proxy/gcs-golfcommunity/api/v2';
+  const VERSION = '0.2.1-bookmarklet';
+  // API 基址用当前页面 origin 拼出来，自动兼容 connect.garmin.com / connect.garmin.cn
+  const BASE = `${location.origin}/modern/proxy/gcs-golfcommunity/api/v2`;
   const RATE_LIMIT_MS = 120;          // 每个请求之间的最小间隔（毫秒）
   const MAX_RETRIES = 3;              // 单个请求最多重试次数
   const RETRY_BACKOFF_MS = 1000;      // 重试退避基数（指数退避）
@@ -30,10 +31,13 @@
   // 环境检查
   // ============================================================
 
-  if (!location.hostname.endsWith('garmin.com')) {
+  // 接受 connect.garmin.com（全球版）和 connect.garmin.cn（中国版）
+  if (!/garmin\.(com|cn)$/.test(location.hostname)) {
     alert(
       '❌ 你需要先登录 Garmin Connect 才能使用此脚本。\n\n' +
-      '请打开 https://connect.garmin.com 登录后，再点击书签栏导出按钮。'
+      '请打开 https://connect.garmin.com（或 connect.garmin.cn）' +
+      '登录后，再点击书签栏导出按钮。\n\n' +
+      `当前页面：${location.hostname}`
     );
     return;
   }
