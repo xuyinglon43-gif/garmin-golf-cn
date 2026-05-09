@@ -149,7 +149,12 @@ _last_call_at = 0.0
 
 
 def call_api(path: str, *, retry: int = 3) -> dict | list:
-    """走 garth.client.connectapi 调用 Garmin API，带限流和重试。"""
+    """调用 Garmin API，走 connect.{garmin.cn,garmin.com} 子域名（不是默认 connectapi）。
+
+    /golf-api/ 这套端点只在 connect.garmin.cn 上有，connectapi 子域名 404。
+    用 garth.client.request("GET", "connect", ...) 强制走 connect 子域名，
+    api=True 让它自动带上 OAuth2 Bearer token。
+    """
     global _last_call_at
     elapsed = time.time() - _last_call_at
     if elapsed < RATE_LIMIT_S:
@@ -159,7 +164,10 @@ def call_api(path: str, *, retry: int = 3) -> dict | list:
     last_err: Exception | None = None
     for attempt in range(1, retry + 1):
         try:
-            return garth.client.connectapi(path)
+            resp = garth.client.request("GET", "connect", path, api=True)
+            if resp.status_code == 204:
+                return {}
+            return resp.json()
         except Exception as e:
             last_err = e
             if attempt < retry:
