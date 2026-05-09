@@ -156,46 +156,76 @@ def call_api(page, path: str, retry: int = 3):
     raise RuntimeError(f"调用 {path} 失败：{last_err}")
 
 
-def fetch_all(domain: str, max_rounds: int | None = None) -> dict:
+def fetch_all(domain: str, max_rounds: int | None = None,
+              headless: bool = False) -> dict:
     base_url = f"https://connect.{domain}/modern/"
     locale = "zh_CN" if domain.endswith(".cn") else "en"
 
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        # 反爬：用真实 Chrome 启动参数 + 隐藏 webdriver 标识
+        browser = p.chromium.launch(
+            headless=headless,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--disable-features=IsolateOrigins,site-per-process",
+            ],
+        )
         context = browser.new_context(
             storage_state=str(STATE_FILE),
             locale="zh-CN",
+            viewport={"width": 1280, "height": 900},
             user_agent=(
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/120.0.0.0 Safari/537.36"
             ),
         )
-        page = context.new_page()
+        # 隐藏 navigator.webdriver = true（Cloudflare 的常见检测）
+        context.add_init_script(
+            "Object.defineProperty(navigator, 'webdriver', {get: () => undefined});"
+        )
 
-        # 桥接浏览器 console 到 Python（debug 用）
+        page = context.new_page()
         page.on("pageerror", lambda err: print(f"  [浏览器错误] {err}"))
 
-        print(f"  → 打开 {base_url}")
+        print(f"  → 打开 {base_url}（{'headless' if headless else '可见'}）")
         try:
-            page.goto(base_url, timeout=30000, wait_until="domcontentloaded")
+            page.goto(base_url, timeout=45000, wait_until="domcontentloaded")
         except PWTimeout:
-            print(f"  ⚠️  页面加载超时（30s），继续尝试 API 调用")
+            print(f"  ⚠️  页面加载超时，继续尝试 API 调用")
 
-        # 等一下 SPA 加载（确保 cookies 设置完成）
+        # 等 SPA 完全加载（cookies / CSRF 等都准备好）
         try:
-            page.wait_for_load_state("networkidle", timeout=10000)
+            page.wait_for_load_state("networkidle", timeout=15000)
         except PWTimeout:
             pass
 
-        # 验证登录态
-        print("  → 验证登录态...")
-        ping = call_api(page, "/gc-api/userprofile-service/userprofile")
-        if isinstance(ping, dict) and ping.get("__error"):
-            print(f"  ✗ 登录态失效（{ping}）")
-            print(f"  → 请清缓存重新登录：python3.11 scripts/fetch_garmin_pw.py --logout")
+        # 验证：直接打 /golf-api/ summary，不用伪 ping。
+        # 用一个不返回大量数据的查询（per-page=1）做轻量验证。
+        print("  → 验证登录态 + 浏览器能否访问 /golf-api/ ...")
+        try:
+            probe = call_api(
+                page,
+                f"{GOLF_API_BASE}/scorecard/summary?per-page=1&user-locale={locale}",
+                retry=2,
+            )
+        except Exception as e:
+            print()
+            print(f"  ✗ 验证失败：{e}")
+            print()
+            print("  可能原因：")
+            print("   1. 登录状态失效 → 跑：python3.11 scripts/fetch_garmin_pw.py --relogin")
+            print("   2. Cloudflare 反爬拦截 → 改用可见浏览器：")
+            print("      python3.11 scripts/fetch_garmin_pw.py（去掉 --headless）")
+            print("   3. .cn 网关本身限制 → 联系我加诊断")
+            browser.close()
             sys.exit(1)
-        print(f"  ✓ 登录态 OK")
+
+        if isinstance(probe, dict) and "scorecardSummaries" in probe:
+            n = len(probe["scorecardSummaries"])
+            print(f"  ✓ 拿到 {n} 轮预览（验证通过）")
+        else:
+            print(f"  ⚠️  响应格式异常：{str(probe)[:200]}")
 
         # 1. 球杆库
         print("\n[1/3] 拉取球杆库…")
@@ -302,6 +332,8 @@ def main() -> int:
                         help="清除登录状态")
     parser.add_argument("--relogin", action="store_true",
                         help="清除并重新登录")
+    parser.add_argument("--headless", action="store_true",
+                        help="完全无 UI（容易被 Cloudflare 反爬拦截，默认关闭）")
     args = parser.parse_args()
 
     if args.logout:
@@ -316,9 +348,10 @@ def main() -> int:
     if not STATE_FILE.exists():
         interactive_login(args.domain)
 
-    print(f"\n📍 目标：connect.{args.domain}")
+    print(f"\n📍 目标：connect.{args.domain}"
+          + ("（headless）" if args.headless else "（可见浏览器，避免反爬）"))
     start = time.time()
-    data = fetch_all(args.domain, max_rounds=args.max_rounds)
+    data = fetch_all(args.domain, max_rounds=args.max_rounds, headless=args.headless)
 
     data["_meta"] = {
         "tool": "garmin-golf-cn",
