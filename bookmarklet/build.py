@@ -136,7 +136,7 @@ INSTALL_HTML = """<!DOCTYPE html>
 </head>
 <body>
   <h1>garmin-golf-cn</h1>
-  <div class="subtitle">浏览器书签栏导出脚本 · v0.2.0</div>
+  <div class="subtitle">浏览器书签栏导出脚本 · v{version}</div>
 
   <h2>一、安装：把按钮拖到书签栏</h2>
   <p>下面这个按钮，<strong>用鼠标拖到浏览器顶部的书签栏</strong>就完成安装：</p>
@@ -197,6 +197,12 @@ LOADER_TEMPLATE = """(function(){
 })();"""
 
 
+def extract_version(source: str) -> str:
+    """从 export.js 抓 VERSION 常量。"""
+    m = re.search(r"const\s+VERSION\s*=\s*['\"]([^'\"]+)['\"]", source)
+    return m.group(1) if m else "unknown"
+
+
 def main() -> int:
     if not SRC.exists():
         print(f"❌ 找不到源文件：{SRC}", file=sys.stderr)
@@ -204,6 +210,7 @@ def main() -> int:
 
     DIST.mkdir(exist_ok=True)
     source = SRC.read_text(encoding="utf-8")
+    version = extract_version(source)
 
     # ---- 方案 A：Loader（推荐，小体积，自动更新） ----
     loader_min = minify_js(LOADER_TEMPLATE)
@@ -221,6 +228,7 @@ def main() -> int:
         INSTALL_HTML.format(
             loader_url=loader_bm.replace('"', "&quot;"),
             inline_url=inline_bm.replace('"', "&quot;"),
+            version=version,
         ),
         encoding="utf-8",
     )
