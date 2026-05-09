@@ -26,17 +26,26 @@
 | 隐私 | — | 上传第三方 | ✅ 全部本地 |
 | 价格 | 免费 | $100/年 | ✅ 免费 MIT |
 
-## 当前状态：Day 0
+## 当前状态
 
+**Phase 0 · Day 0** ✅
 - [x] 核心 SG 计算引擎（`core/sg.py`）
 - [x] 6 档差点基线（差点 0/5/10/15/20/25）
 - [x] 中文术语映射
 - [x] 模拟数据 demo（无需 Garmin 设备即可跑通）
-- [ ] 浏览器书签栏脚本（`bookmarklet/export.js`）
-- [ ] Garmin Connect Python 抓取器（基于 `python-garminconnect`）
-- [ ] CLI 命令行工具（`ggc sync` / `ggc sg` / `ggc report`）
-- [ ] 中文 PDF 月报生成（weasyprint）
+
+**Phase 1 · 浏览器书签栏导出** ✅
+- [x] [Garmin API 端点完整参考](docs/garmin-api-reference.md)
+- [x] [浏览器书签栏脚本](bookmarklet/export.js)（fetch + 进度条 + 限流 + 重试）
+- [x] [中文安装页](bookmarklet/dist/install.html)（loader + inline 双版本）
+- [x] [使用文档](docs/bookmarklet-cn.md)
+
+**进行中 / 规划中**
+- [ ] 数据格式标准化层（`core/garmin_adapter.py`）
+- [ ] 中文 PDF 月报（weasyprint，复用 Noto CJK 管道）
 - [ ] 网站工具集成（[golf-strategy-tools](https://golf-strategy-tools.vercel.app) 的工具 #5）
+- [ ] Python 抓取器（基于 `python-garminconnect`）
+- [ ] CLI 命令行工具（`ggc sync` / `ggc sg` / `ggc report`）
 
 ## 快速试跑（Day 0）
 
