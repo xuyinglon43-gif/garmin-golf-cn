@@ -1,0 +1,41 @@
+{
+  "course_name": "阳光城高尔夫俱乐部",
+  "date": "2026-05-08",
+  "notes": "模拟数据：差点 15 球友的典型 6 洞表现，进攻杆偏弱用于 demo SG 拆解",
+  "shots": [
+    {"hole_number": 1, "shot_number": 1, "par": 4, "start_lie": "tee",     "start_distance_yards": 380, "end_lie": "fairway", "end_distance_yards": 150, "club": "driver"},
+    {"hole_number": 1, "shot_number": 2, "par": 4, "start_lie": "fairway", "start_distance_yards": 150, "end_lie": "green",   "end_distance_yards": 12,  "club": "7i"},
+    {"hole_number": 1, "shot_number": 3, "par": 4, "start_lie": "green",   "start_distance_yards": 12,  "end_lie": "green",   "end_distance_yards": 2,   "club": "putter"},
+    {"hole_number": 1, "shot_number": 4, "par": 4, "start_lie": "green",   "start_distance_yards": 2,   "end_lie": "holed",   "end_distance_yards": 0,   "club": "putter"},
+
+    {"hole_number": 2, "shot_number": 1, "par": 4, "start_lie": "tee",     "start_distance_yards": 410, "end_lie": "rough",   "end_distance_yards": 200, "club": "driver"},
+    {"hole_number": 2, "shot_number": 2, "par": 4, "start_lie": "rough",   "start_distance_yards": 200, "end_lie": "rough",   "end_distance_yards": 60,  "club": "5i"},
+    {"hole_number": 2, "shot_number": 3, "par": 4, "start_lie": "rough",   "start_distance_yards": 60,  "end_lie": "green",   "end_distance_yards": 8,   "club": "sw"},
+    {"hole_number": 2, "shot_number": 4, "par": 4, "start_lie": "green",   "start_distance_yards": 8,   "end_lie": "green",   "end_distance_yards": 2,   "club": "putter"},
+    {"hole_number": 2, "shot_number": 5, "par": 4, "start_lie": "green",   "start_distance_yards": 2,   "end_lie": "holed",   "end_distance_yards": 0,   "club": "putter"},
+
+    {"hole_number": 3, "shot_number": 1, "par": 3, "start_lie": "tee",     "start_distance_yards": 165, "end_lie": "sand",    "end_distance_yards": 15,  "club": "6i"},
+    {"hole_number": 3, "shot_number": 2, "par": 3, "start_lie": "sand",    "start_distance_yards": 15,  "end_lie": "green",   "end_distance_yards": 6,   "club": "sw"},
+    {"hole_number": 3, "shot_number": 3, "par": 3, "start_lie": "green",   "start_distance_yards": 6,   "end_lie": "green",   "end_distance_yards": 2,   "club": "putter"},
+    {"hole_number": 3, "shot_number": 4, "par": 3, "start_lie": "green",   "start_distance_yards": 2,   "end_lie": "holed",   "end_distance_yards": 0,   "club": "putter"},
+
+    {"hole_number": 4, "shot_number": 1, "par": 5, "start_lie": "tee",     "start_distance_yards": 510, "end_lie": "fairway", "end_distance_yards": 280, "club": "driver"},
+    {"hole_number": 4, "shot_number": 2, "par": 5, "start_lie": "fairway", "start_distance_yards": 280, "end_lie": "fairway", "end_distance_yards": 90,  "club": "5w"},
+    {"hole_number": 4, "shot_number": 3, "par": 5, "start_lie": "fairway", "start_distance_yards": 90,  "end_lie": "green",   "end_distance_yards": 14,  "club": "pw"},
+    {"hole_number": 4, "shot_number": 4, "par": 5, "start_lie": "green",   "start_distance_yards": 14,  "end_lie": "green",   "end_distance_yards": 3,   "club": "putter"},
+    {"hole_number": 4, "shot_number": 5, "par": 5, "start_lie": "green",   "start_distance_yards": 3,   "end_lie": "holed",   "end_distance_yards": 0,   "club": "putter"},
+
+    {"hole_number": 5, "shot_number": 1, "par": 4, "start_lie": "tee",     "start_distance_yards": 360, "end_lie": "fairway", "end_distance_yards": 140, "club": "driver"},
+    {"hole_number": 5, "shot_number": 2, "par": 4, "start_lie": "fairway", "start_distance_yards": 140, "end_lie": "rough",   "end_distance_yards": 35,  "club": "8i"},
+    {"hole_number": 5, "shot_number": 3, "par": 4, "start_lie": "rough",   "start_distance_yards": 35,  "end_lie": "green",   "end_distance_yards": 6,   "club": "gw"},
+    {"hole_number": 5, "shot_number": 4, "par": 4, "start_lie": "green",   "start_distance_yards": 6,   "end_lie": "green",   "end_distance_yards": 1,   "club": "putter"},
+    {"hole_number": 5, "shot_number": 5, "par": 4, "start_lie": "green",   "start_distance_yards": 1,   "end_lie": "holed",   "end_distance_yards": 0,   "club": "putter"},
+
+    {"hole_number": 6, "shot_number": 1, "par": 4, "start_lie": "tee",     "start_distance_yards": 440, "end_lie": "rough",   "end_distance_yards": 220, "club": "driver"},
+    {"hole_number": 6, "shot_number": 2, "par": 4, "start_lie": "rough",   "start_distance_yards": 220, "end_lie": "fairway", "end_distance_yards": 70,  "club": "5i"},
+    {"hole_number": 6, "shot_number": 3, "par": 4, "start_lie": "fairway", "start_distance_yards": 70,  "end_lie": "green",   "end_distance_yards": 18,  "club": "sw"},
+    {"hole_number": 6, "shot_number": 4, "par": 4, "start_lie": "green",   "start_distance_yards": 18,  "end_lie": "green",   "end_distance_yards": 4,   "club": "putter"},
+    {"hole_number": 6, "shot_number": 5, "par": 4, "start_lie": "green",   "start_distance_yards": 4,   "end_lie": "green",   "end_distance_yards": 1,   "club": "putter"},
+    {"hole_number": 6, "shot_number": 6, "par": 4, "start_lie": "green",   "start_distance_yards": 1,   "end_lie": "holed",   "end_distance_yards": 0,   "club": "putter"}
+  ]
+}

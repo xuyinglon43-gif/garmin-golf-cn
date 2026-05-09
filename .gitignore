@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Build
+build/
+dist/
+
+# Local data (用户实际数据不应进仓库)
+data/
+*.sqlite
+*.db
+*_local.json
+
+# Garmin 凭证缓存（如果未来用到）
+.garmincache/
+.garminconnect/
+
+# Node (未来网站集成用)
+node_modules/
+
+# macOS
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# 用户配置
+.env
+.env.local
+config_local.*
