@@ -2,16 +2,22 @@
 将 export.js 打包成 bookmarklet 形式。
 
 输出：
-    dist/export.bookmarklet.txt   完整的 javascript: URL，复制到书签
-    dist/install.html             安装页（含可拖到书签栏的链接）
+    dist/loader.bookmarklet.txt    Loader 版（SHA 锁定，永不缓存冲突）
+    dist/inline.bookmarklet.txt    Inline 版（自包含，CSP 严格时用）
+    dist/install.html              安装页（含可拖到书签栏的链接）
 
 跑法（仓库根目录下）：
     python bookmarklet/build.py
+
+注意：Loader 版会嵌入当前 git HEAD 的 commit SHA。每次代码更新后必须
+      重新构建 + 推送 + 用户重装书签——这是有意为之，避免浏览器缓存
+      旧版本的 export.js 导致用户看到陈旧行为。
 """
 
 from __future__ import annotations
 
 import re
+import subprocess
 import sys
 from pathlib import Path
 from urllib.parse import quote
@@ -20,6 +26,21 @@ ROOT = Path(__file__).resolve().parent
 SRC = ROOT / "export.js"
 DIST = ROOT / "dist"
 INSTALL_TEMPLATE = ROOT / "install.template.html"
+
+
+def get_git_sha() -> str:
+    """返回当前 HEAD 的短 SHA。失败时返回 'main'（fallback）。"""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short=7", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=ROOT,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return "main"
 
 
 def minify_js(source: str) -> str:
@@ -183,12 +204,13 @@ INSTALL_HTML = """<!DOCTYPE html>
 """
 
 
-#: GitHub raw 走 jsDelivr CDN（免费、CORS 友好、有 SLA），主分支自动跟踪
+#: GitHub raw 走 jsDelivr CDN，URL 用 commit SHA 锁定永不冲突
+#: build.py 调用时会把 {SHA} 替换成当前 HEAD 的 7 位短 SHA
 LOADER_TEMPLATE = """(function(){
   if(window._ggcLoading)return;
   window._ggcLoading=true;
   var s=document.createElement('script');
-  s.src='https://cdn.jsdelivr.net/gh/xuyinglon43-gif/garmin-golf-cn@main/bookmarklet/export.js?t='+Date.now();
+  s.src='https://cdn.jsdelivr.net/gh/xuyinglon43-gif/garmin-golf-cn@{SHA}/bookmarklet/export.js';
   s.onerror=function(){
     alert('❌ 脚本加载失败。可能是网络问题或 Garmin 页面的 CSP 限制。\\n\\n备选方案：见 install.html 的"备用方案"部分。');
     window._ggcLoading=false;
@@ -211,9 +233,11 @@ def main() -> int:
     DIST.mkdir(exist_ok=True)
     source = SRC.read_text(encoding="utf-8")
     version = extract_version(source)
+    sha = get_git_sha()
 
-    # ---- 方案 A：Loader（推荐，小体积，自动更新） ----
-    loader_min = minify_js(LOADER_TEMPLATE)
+    # ---- 方案 A：Loader（推荐，小体积，SHA 锁定永不缓存冲突） ----
+    loader_template = LOADER_TEMPLATE.replace("{SHA}", sha)
+    loader_min = minify_js(loader_template)
     loader_bm = make_bookmarklet(loader_min)
     (DIST / "loader.bookmarklet.txt").write_text(loader_bm, encoding="utf-8")
 
@@ -234,13 +258,16 @@ def main() -> int:
     )
 
     src_size = len(source.encode("utf-8"))
-    print(f"✅ 源文件：               {src_size:>7,} 字节")
-    print(f"✅ Loader bookmarklet：   {len(loader_bm):>7,} 字节  ⭐ 推荐")
+    print(f"✅ 源文件：               {src_size:>7,} 字节  v{version}")
+    print(f"✅ Loader bookmarklet：   {len(loader_bm):>7,} 字节  ⭐ 推荐 (锁定 SHA: {sha})")
     print(f"✅ Inline bookmarklet：   {len(inline_bm):>7,} 字节  （备用）")
     print(f"✅ 输出：")
     print(f"   - dist/loader.bookmarklet.txt")
     print(f"   - dist/inline.bookmarklet.txt")
     print(f"   - dist/install.html")
+    print()
+    print(f"⚠️  注意：Loader 锁定到 commit {sha}。下次代码更新后")
+    print(f"   必须重新 commit + python bookmarklet/build.py + 用户重装书签。")
     print()
     print("打开 install.html 看带按钮的安装页。")
     return 0
