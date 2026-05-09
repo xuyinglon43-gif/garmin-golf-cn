@@ -12,6 +12,9 @@ venv/
 # Build
 build/
 dist/
+# 例外：bookmarklet 的 dist 是用户要直接下载的产物，需要进仓库
+!bookmarklet/dist/
+!bookmarklet/dist/**
 
 # Local data (用户实际数据不应进仓库)
 data/
