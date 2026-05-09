@@ -20,7 +20,7 @@
   // 配置
   // ============================================================
 
-  const VERSION = '0.2.1-bookmarklet';
+  const VERSION = '0.2.2-bookmarklet';
   // API 基址用当前页面 origin 拼出来，自动兼容 connect.garmin.com / connect.garmin.cn
   const BASE = `${location.origin}/modern/proxy/gcs-golfcommunity/api/v2`;
   const RATE_LIMIT_MS = 120;          // 每个请求之间的最小间隔（毫秒）
@@ -179,6 +179,19 @@
   }
 
   /**
+   * 可中断 sleep（取消时立即返回）。
+   */
+  async function interruptibleSleep(ms) {
+    const tick = 100;
+    let elapsed = 0;
+    while (elapsed < ms) {
+      if (cancelled) return;
+      await sleep(Math.min(tick, ms - elapsed));
+      elapsed += tick;
+    }
+  }
+
+  /**
    * 带重试 + 限流的 fetch JSON。
    * 用 fetch credentials:'include' 自动带上当前登录的 Garmin cookies。
    */
@@ -186,27 +199,64 @@
   async function fetchJSON(url, attempt = 1) {
     if (cancelled) throw new Error('已取消');
     const wait = RATE_LIMIT_MS - (Date.now() - lastRequestAt);
-    if (wait > 0) await sleep(wait);
+    if (wait > 0) await interruptibleSleep(wait);
+    if (cancelled) throw new Error('已取消');
     lastRequestAt = Date.now();
 
+    let resp;
     try {
-      const resp = await fetch(url, {
+      resp = await fetch(url, {
         credentials: 'include',
         headers: { 'Accept': 'application/json' },
       });
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
-      return await resp.json();
     } catch (err) {
-      if (attempt < MAX_RETRIES) {
+      // 网络错误 / URL 不合法 / CORS 拒绝
+      if (attempt < MAX_RETRIES && !cancelled) {
         const backoff = RETRY_BACKOFF_MS * Math.pow(2, attempt - 1);
-        logDetail(`⟳ 重试 ${attempt}/${MAX_RETRIES - 1}：${url.split('/').slice(-2).join('/')}`);
-        await sleep(backoff);
+        logDetail(
+          `⟳ 重试 ${attempt}/${MAX_RETRIES - 1}：${url}（${err.message}）`,
+          'err'
+        );
+        await interruptibleSleep(backoff);
         return fetchJSON(url, attempt + 1);
       }
+      logDetail(`✗ fetch 失败：${url}`, 'err');
+      logDetail(`  错误类型：${err.name} - ${err.message}`, 'err');
       throw err;
     }
+
+    if (!resp.ok) {
+      // HTTP 错误：保留完整诊断
+      let bodyPreview = '';
+      try {
+        bodyPreview = (await resp.text()).slice(0, 200);
+      } catch (_) { /* ignore */ }
+      logDetail(
+        `✗ HTTP ${resp.status} ${resp.statusText} on ${url}`,
+        'err'
+      );
+      if (bodyPreview) {
+        logDetail(`  响应前 200 字符：${bodyPreview}`, 'err');
+      }
+      if (attempt < MAX_RETRIES && resp.status >= 500 && !cancelled) {
+        const backoff = RETRY_BACKOFF_MS * Math.pow(2, attempt - 1);
+        await interruptibleSleep(backoff);
+        return fetchJSON(url, attempt + 1);
+      }
+      throw new Error(`HTTP ${resp.status} on ${url}`);
+    }
+
+    // 检查响应是否真的是 JSON（防止登录过期返回 HTML）
+    const ctype = resp.headers.get('content-type') || '';
+    if (!ctype.includes('json')) {
+      const bodyPreview = (await resp.text()).slice(0, 200);
+      logDetail(`✗ 响应不是 JSON：${url}`, 'err');
+      logDetail(`  Content-Type: ${ctype}`, 'err');
+      logDetail(`  响应前 200 字符：${bodyPreview}`, 'err');
+      throw new Error(`Non-JSON response (Content-Type: ${ctype})`);
+    }
+
+    return await resp.json();
   }
 
   // ============================================================
