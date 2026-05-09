@@ -20,9 +20,13 @@
   // 配置
   // ============================================================
 
-  const VERSION = '0.2.2-bookmarklet';
-  // API 基址用当前页面 origin 拼出来，自动兼容 connect.garmin.com / connect.garmin.cn
-  const BASE = `${location.origin}/modern/proxy/gcs-golfcommunity/api/v2`;
+  const VERSION = '0.2.3-bookmarklet';
+  // API 路径区分（实测 2026-05 connect.garmin.cn 的实际路径）：
+  //   /modern/proxy/gcs-golfcommunity/...  ← gsingers 老路径，已废弃
+  //   /golf-api/gcs-golfcommunity/...      ← 现代路径（.cn 和 .com 都用这个）
+  const BASE = `${location.origin}/golf-api/gcs-golfcommunity/api/v2`;
+  // 中文用户用 zh_CN locale，让响应里的球场名等是中文
+  const USER_LOCALE = (location.hostname.endsWith('.cn') ? 'zh_CN' : 'en');
   const RATE_LIMIT_MS = 120;          // 每个请求之间的最小间隔（毫秒）
   const MAX_RETRIES = 3;              // 单个请求最多重试次数
   const RETRY_BACKOFF_MS = 1000;      // 重试退避基数（指数退避）
@@ -284,7 +288,7 @@
   let summary;
   try {
     summary = await fetchJSON(
-      `${BASE}/scorecard/summary?per-page=10000&user-locale=en`
+      `${BASE}/scorecard/summary?per-page=10000&user-locale=${USER_LOCALE}`
     );
   } catch (err) {
     alert(`致命错误：无法拉取轮次列表（${err.message}）。请检查登录状态后重试。`);
